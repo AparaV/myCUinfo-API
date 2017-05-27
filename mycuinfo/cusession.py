@@ -118,218 +118,256 @@ class CUSession(requests.sessions.Session):
         # from here on, we are a regular user who has all the logged in cookies
         # we can do anything that a web user could (javascript not included)
         self.session = session
+        self.__student_info = None
+        self.__student_classes = {}
+        self.__student_books = {}
+        self.__student_gpa = None
 
     # get the basic info of the user (name, student ID, Major, College, etc.)
-    def info(self):
+    def info(self, force=False):
 
-        # if the user is not logged in, error out, else go for it
-        if self.valid == False:
-            return False
+        # try retrieving cached data
+        if self.__student_info is None or force:
 
-        # set the url (break it up so the line isnt huge)
-        url0 = "https://portal.prod.cu.edu/psp/epprod/UCB2/ENTP/h/?cmd=get"
-        url1 = "CachedPglt&pageletname=ISCRIPT_CU_PROFILE_V2"
-        url = url0 + url1
+            # if the user is not logged in, error out, else go for it
+            if self.valid == False:
+                return False
 
-        # get the page
-        pageLoad = self.session.get(url)
+            # set the url (break it up so the line isnt huge)
+            url0 = "https://portal.prod.cu.edu/psp/epprod/UCB2/ENTP/h/?cmd=get"
+            url1 = "CachedPglt&pageletname=ISCRIPT_CU_PROFILE_V2"
+            url = url0 + url1
 
-        # get the text (encode it unicode)
-        pageText = pageLoad.text
+            # get the page
+            pageLoad = self.session.get(url)
 
-        # split the text up a few times till we just have the info
-        splitText = pageText.split("<!--")[1][:-2].strip().split("\n")[2:-5]
+            # get the text (encode it unicode)
+            pageText = pageLoad.text
 
-        # create a blank dictonary to add to
-        info = {}
+            # split the text up a few times till we just have the info
+            splitText = pageText.split("<!--")[1][:-2].strip().split("\n")[2:-5]
 
-        # Each item will be formatted like <name>value</name> or <name>
-        # Only items like the former will be added
-        for item in splitText:
-            name = item.split('<')[1].split('>')[0]
-            value = item.split('>')[1].split('<')[0]
-            if value != "":
-                info[name] = value
+            # create a blank dictonary to add to
+            info = {}
 
-        return info
+            # Each item will be formatted like <name>value</name> or <name>
+            # Only items like the former will be added
+            for item in splitText:
+                name = item.split('<')[1].split('>')[0]
+                value = item.split('>')[1].split('<')[0]
+                if value != "":
+                    info[name] = value
 
-    def classes(self, term="Spring 2017"):
+            self.__student_info = info
 
-        # if the user is not logged in, error out, else go for it
-        if self.valid == False:
-            return False
+        return self.__student_info
 
-        # split up the url so it fits on one line
-        url0 = "https://portal.prod.cu.edu/psp/epprod/UCB2/ENTP/h/"
-        url1 = "?cmd=getCachedPglt&pageletname=CU_STUDENT_SCHEDULE"
-        url = url0 + url1
+    def classes(self, term="Spring 2017", force=False):
 
-        # get the page text
-        pageText = self.session.get(url).text
+        # check if data exists
+        if term in self.__student_classes.keys():
+            found = True
+        else:
+            found = False
 
-        # split up the first part by the Course Schedule
-        try:
-            fallText = pageText.split("Grades / Details: " + term)[1].split(
-                "* FCQ = Faculty Course Questionnaire")[0]
-        except:
-            print("Invalid term given for classes. Valid Ex: 'Fall 2015'")
-            return None
+        # try retrieving cached data
+        if not found or force:
 
-        classInfoList = fallText.split("<tr>")[2:]
+            # if the user is not logged in, error out, else go for it
+            if self.valid == False:
+                return False
 
-        classList = []
+            # split up the url so it fits on one line
+            url0 = "https://portal.prod.cu.edu/psp/epprod/UCB2/ENTP/h/"
+            url1 = "?cmd=getCachedPglt&pageletname=CU_STUDENT_SCHEDULE"
+            url = url0 + url1
 
-        for classInfo in classInfoList:
+            # get the page text
+            pageText = self.session.get(url).text
 
-            # a lot of html parsing and spliting. Really hard to leave a nice
-            # context without looking at the html. Tried to write so things
-            # won't get wonky if values are blank
-
-            tempClass = {}
-
-            courseSection = classInfo[5:].split("&nbsp;")
-
-            if len(courseSection) == 1:
-                continue
-
-            nameAndType = classInfo.split('<th')[1].split('>')[1].split('<')[0]
-            nameAndType = nameAndType.split('&nbsp;')
-            tempClass["name"] = nameAndType[0]
-            tempClass["type"] = nameAndType[1][1:-1]
-            classInfo = classInfo.split('</th>')[1]
-
-            courseInfo = classInfo.split('<td>')[1].split('<br')[0]
-
-            tempClass["department"] = courseInfo[0:4]
-            courseInfo = courseInfo.split('-')
-            tempClass["classCode"] = courseInfo[0][-4:]
-            tempClass["section"] = courseInfo[1]
-            classInfo = classInfo.split('</td>')[1:]
-
-            dateAndTime = classInfo[0].split("meetingtime\"")[1][
-                1:].split("</div>")[0].split(">")
-
-            tempClass["days"] = dateAndTime[0].split("<")[0][:-1]
-            tempClass["startTime"] = dateAndTime[1].split("<")[0]
-            tempClass["endTime"] = dateAndTime[3].split("<")[0]
-
-            tempInstructor = {}
-
-            # Some courses (mostly recitations) don't have an instructor listed
+            # split up the first part by the Course Schedule
             try:
-                instructorInfo = classInfo[1].split("meetingtime\"")[1][
+                fallText = pageText.split("Grades / Details: " + term)[1].split(
+                    "* FCQ = Faculty Course Questionnaire")[0]
+            except:
+                print("Invalid term given for classes. Valid Ex: 'Fall 2015'")
+                return None
+
+            classInfoList = fallText.split("<tr>")[2:]
+
+            classList = []
+
+            for classInfo in classInfoList:
+
+                # a lot of html parsing and spliting. Really hard to leave a nice
+                # context without looking at the html. Tried to write so things
+                # won't get wonky if values are blank
+
+                tempClass = {}
+
+                courseSection = classInfo[5:].split("&nbsp;")
+
+                if len(courseSection) == 1:
+                    continue
+
+                nameAndType = classInfo.split('<th')[1].split(
+                    '>')[1].split('<')[0]
+                nameAndType = nameAndType.split('&nbsp;')
+                tempClass["name"] = nameAndType[0]
+                tempClass["type"] = nameAndType[1][1:-1]
+                classInfo = classInfo.split('</th>')[1]
+
+                courseInfo = classInfo.split('<td>')[1].split('<br')[0]
+
+                tempClass["department"] = courseInfo[0:4]
+                courseInfo = courseInfo.split('-')
+                tempClass["classCode"] = courseInfo[0][-4:]
+                tempClass["section"] = courseInfo[1]
+                classInfo = classInfo.split('</td>')[1:]
+
+                dateAndTime = classInfo[0].split("meetingtime\"")[1][
                     1:].split("</div>")[0].split(">")
 
-                instrutr = instructorInfo[0].split("&nbsp;")[0].split(" ")
+                tempClass["days"] = dateAndTime[0].split("<")[0][:-1]
+                tempClass["startTime"] = dateAndTime[1].split("<")[0]
+                tempClass["endTime"] = dateAndTime[3].split("<")[0]
 
-                tempInstructor["firstName"] = instrutr[1]
-                tempInstructor["lastName"] = instrutr[0]
-            except:
-                tempInstructor["firstName"] = "Staff"
-                tempInstructor["lastName"] = ""
+                tempInstructor = {}
 
-            tempClass["instructor"] = tempInstructor
+                # Some courses don't have an instructor listed
+                try:
+                    instructorInfo = classInfo[1].split("meetingtime\"")[1][
+                        1:].split("</div>")[0].split(">")
 
-            tempClass["credits"] = int(classInfo[3].split(">")[1])
-            tempClass["status"] = classInfo[4].split(">")[1]
-            tempClass["grade"] = classInfo[5].split(">")[1]
+                    instrutr = instructorInfo[0].split("&nbsp;")[0].split(" ")
 
-            if tempClass["grade"] == "":
-                del(tempClass["grade"])
+                    tempInstructor["firstName"] = instrutr[1]
+                    tempInstructor["lastName"] = instrutr[0]
+                except:
+                    tempInstructor["firstName"] = "Staff"
+                    tempInstructor["lastName"] = ""
 
-            classList.append(tempClass)
+                tempClass["instructor"] = tempInstructor
 
-        return classList
+                tempClass["credits"] = int(classInfo[3].split(">")[1])
+                tempClass["status"] = classInfo[4].split(">")[1]
+                tempClass["grade"] = classInfo[5].split(">")[1]
+
+                if tempClass["grade"] == "":
+                    del(tempClass["grade"])
+
+                classList.append(tempClass)
+
+            self.__student_classes[term] = classList
+
+        return self.__student_classes[term]
 
     # look up the books needed for any class
-    def books(self, Department, CourseNumber, Section, term="Fall2015"):
+    def books(self, Department, CourseNumber, Section,
+                term="Fall2015", force=False):
 
-        # if the user is not logged in, error out, else go for it
-        if self.valid == False:
-            return False
-
-        # set the term info, we made it a little nicer becuase CU uses nums to
-        # set the term info. The move up by three/four every semester, so we can
-        # use that forumual to change the term info to correct number for the
-        # API.
-        if term == "Fall2015" or term == 2147:
-            term = "2157"
-        elif term == "Spring2015" or term == 2151:
-            term = "2151"
-        elif term == "Summer2015" or term == 2154:
-            term = "2154"
-        elif term == 2167:
-            term = "2167"
+        # check if data exists
+        key = term + Department + str(CourseNumber) + str(Section)
+        if key in self.__student_books.keys():
+            found = True
         else:
-            raise Exception("Error: Invalid Term")
+            found = False
 
-        # simple check to see if the department is valid
-        if len(Department) != 4:
-            raise Exception("Error: Invalid Department")
+        # try retrieving cached data
+        if not found or force:
 
-        # simple check to see if Course Number is valid
-        if len(CourseNumber) != 4:
-            raise Exception("Error: Invalid CourseNumber")
+            # if the user is not logged in, error out, else go for it
+            if self.valid == False:
+                return False
 
-        # simple check to see if Section Number is valid
-        if len(Section) != 3:
-            raise Exception("Error: Invalid Section (DO included leading 0s)")
+            # set the term info, we made it a little nicer becuase CU uses nums to
+            # set the term info. The move up by three/four every semester, so we can
+            # use that forumual to change the term info to correct number for the
+            # API.
+            if term == "Fall2015" or term == 2147:
+                term = "2157"
+            elif term == "Spring2015" or term == 2151:
+                term = "2151"
+            elif term == "Summer2015" or term == 2154:
+                term = "2154"
+            elif term == 2167:
+                term = "2167"
+            else:
+                raise Exception("Error: Invalid Term")
 
-        # now that all the check are there, we can start trying to get books
+            # simple check to see if the department is valid
+            if len(Department) != 4:
+                raise Exception("Error: Invalid Department")
 
-        # set the base url (split so the line isnt huge)
-        baseUrl0 = "https://portal.prod.cu.edu/psc/epprod/UCB2/ENTP/s/WEBLIB_CU"
-        baseUrl1 = "_SCHED.ISCRIPT1.FieldFormula.IScript_Get_Boulder_Books?"
-        baseUrl = baseUrl0 + baseUrl1
+            # simple check to see if Course Number is valid
+            if len(CourseNumber) != 4:
+                raise Exception("Error: Invalid CourseNumber")
 
-        # set the inputs based on the method inputs
-        course1 = "&course1=" + Department + CourseNumber
-        section1 = "&section1=" + Section
-        term1 = "&term1=" + term
+            # simple check to see if Section Number is valid
+            if len(Section) != 3:
+                raise Exception("Error: Invalid Section (DO included leading 0s)")
 
-        # we set a variable called session1, I have always found it to equal B
-        session1 = "&session1=B"
+            # now that all the check are there, we can start trying to get books
 
-        pageText = self.session.get(
-            baseUrl + course1 + section1 + term1 + session1).text
-        bookList = []
+            # set the base url (split so the line isnt huge)
+            baseUrl0 = "https://portal.prod.cu.edu/psc/epprod/UCB2/ENTP/s/WEBLIB_CU"
+            baseUrl1 = "_SCHED.ISCRIPT1.FieldFormula.IScript_Get_Boulder_Books?"
+            baseUrl = baseUrl0 + baseUrl1
 
-        bookInfoList = pageText.split("<tbody>")[1].split(
-            "</tbody>")[0].split("<tr>")[1:]
+            # set the inputs based on the method inputs
+            course1 = "&course1=" + Department + CourseNumber
+            section1 = "&section1=" + Section
+            term1 = "&term1=" + term
 
-        for bookInfo in bookInfoList:
+            # we set a variable called session1, I have always found it to equal B
+            session1 = "&session1=B"
 
-            infoList = bookInfo.split("<td")
-            tempBook = {}
+            pageText = self.session.get(
+                baseUrl + course1 + section1 + term1 + session1).text
+            bookList = []
 
-            # gets all the book info, adds nothing is something errors
-            try:
-                tempBook["author"] = infoList[1][1:-6]
-                tempBook["title"] = infoList[2][1:-6]
-                tempBook["required"] = infoList[3].split(">")[1][:-4]
-                tempBook["course"] = infoList[4][1:-6].replace('\n', "")
-                tempBook["isbn"] = infoList[5][1:-12]
+            bookInfoList = pageText.split("<tbody>")[1].split(
+                "</tbody>")[0].split("<tr>")[1:]
 
-                bookList.append(tempBook)
-            except:
-                pass
-        return bookList
+            for bookInfo in bookInfoList:
+
+                infoList = bookInfo.split("<td")
+                tempBook = {}
+
+                # gets all the book info, adds nothing is something errors
+                try:
+                    tempBook["author"] = infoList[1][1:-6]
+                    tempBook["title"] = infoList[2][1:-6]
+                    tempBook["required"] = infoList[3].split(">")[1][:-4]
+                    tempBook["course"] = infoList[4][1:-6].replace('\n', "")
+                    tempBook["isbn"] = infoList[5][1:-12]
+
+                    bookList.append(tempBook)
+                except:
+                    pass
+
+            self.__student_books[key] = bookList
+
+        return self.__student_books[key]
 
     # look up overall GPA
-    def GPA(self):
+    def GPA(self, force=False):
 
-        # set the url (broken up for line length)
-        url0 = "https://isis-cs.prod.cu.edu/psc/csprod/UCB2/HRMS/c/"
-        url1 = "SA_LEARNER_SERVICES.SSR_SSENRL_GRADE.GBL?"
-        url2 = "ACAD_CAREER=UGRD&INSTITUTION=CUBLD&STRM=2151"
-        baseUrl = url0 + url1 + url2
+        # try retrieving cached data
+        if self.__student_gpa is None or force:
 
-        # get the page text
-        pageText = self.session.post(baseUrl).text
+            # set the url (broken up for line length)
+            url0 = "https://isis-cs.prod.cu.edu/psc/csprod/UCB2/HRMS/c/"
+            url1 = "SA_LEARNER_SERVICES.SSR_SSENRL_GRADE.GBL?"
+            url2 = "ACAD_CAREER=UGRD&INSTITUTION=CUBLD&STRM=2151"
+            baseUrl = url0 + url1 + url2
 
-        # get the GPA
-        splitText = pageText.split("PSEDITBOXLABEL")[-1].split(">")[1][:5]
+            # get the page text
+            pageText = self.session.post(baseUrl).text
 
-        GPA = float(splitText)
+            # get the GPA
+            splitText = pageText.split("PSEDITBOXLABEL")[-1].split(">")[1][:5]
 
-        return GPA
+            self.__student_gpa = float(splitText)
+
+        return self.__student_gpa
