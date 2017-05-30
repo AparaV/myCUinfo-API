@@ -118,16 +118,18 @@ class CUSession(requests.sessions.Session):
         # from here on, we are a regular user who has all the logged in cookies
         # we can do anything that a web user could (javascript not included)
         self.session = session
-        self.__student_info = None
-        self.__student_classes = {}
-        self.__student_books = {}
-        self.__student_gpa = None
+
+        # cached data
+        self.__cached_info = None
+        self.__cached_classes = {}
+        self.__cached_books = {}
+        self.__cached_gpa = None
 
     # get the basic info of the user (name, student ID, Major, College, etc.)
     def info(self, force=False):
 
         # try retrieving cached data
-        if self.__student_info is None or force:
+        if self.__cached_info is None or force:
 
             # if the user is not logged in, error out, else go for it
             if self.valid == False:
@@ -158,14 +160,14 @@ class CUSession(requests.sessions.Session):
                 if value != "":
                     info[name] = value
 
-            self.__student_info = info
+            self.__cached_info = info
 
-        return self.__student_info
+        return self.__cached_info
 
     def classes(self, term="Spring 2017", force=False):
 
         # check if data exists
-        if term in self.__student_classes.keys():
+        if term in self.__cached_classes.keys():
             found = True
         else:
             found = False
@@ -258,9 +260,9 @@ class CUSession(requests.sessions.Session):
 
                 classList.append(tempClass)
 
-            self.__student_classes[term] = classList
+            self.__cached_classes[term] = classList
 
-        return self.__student_classes[term]
+        return self.__cached_classes[term]
 
     # look up the books needed for any class
     def books(self, Department, CourseNumber, Section,
@@ -268,7 +270,7 @@ class CUSession(requests.sessions.Session):
 
         # check if data exists
         key = term + Department + str(CourseNumber) + str(Section)
-        if key in self.__student_books.keys():
+        if key in self.__cached_books.keys():
             found = True
         else:
             found = False
@@ -346,15 +348,15 @@ class CUSession(requests.sessions.Session):
                 except:
                     pass
 
-            self.__student_books[key] = bookList
+            self.__cached_books[key] = bookList
 
-        return self.__student_books[key]
+        return self.__cached_books[key]
 
     # look up overall GPA
     def GPA(self, force=False):
 
         # try retrieving cached data
-        if self.__student_gpa is None or force:
+        if self.__cached_gpa is None or force:
 
             # set the url (broken up for line length)
             url0 = "https://isis-cs.prod.cu.edu/psc/csprod/UCB2/HRMS/c/"
@@ -368,6 +370,6 @@ class CUSession(requests.sessions.Session):
             # get the GPA
             splitText = pageText.split("PSEDITBOXLABEL")[-1].split(">")[1][:5]
 
-            self.__student_gpa = float(splitText)
+            self.__cached_gpa = float(splitText)
 
-        return self.__student_gpa
+        return self.__cached_gpa
