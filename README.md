@@ -14,6 +14,8 @@ Then run the code with python 2.7 or 3.x
 ## Functions and Output
 The API currently has a few functions that scrape the info off the myCUinfo site. They all use methods on an initialized CUSessions logged in user. This way the convoluted login process is only handled once.
 
+Since the data we're fetching is pretty much static except for the semester transition period, the API now supports caching. So, only the first call to fetch data will retrieve the need to visit the website. Every subsequent call to "fetch" the same data will simply retrieve the data stored earlier. This is much faster and slow internet speed should no longer stop you! In case you want to force the program to fetch fresh data, you can pass in an optional `force=True` argument to the function. By default `force` is set to `False`.
+
 #### CUSession(username, password) [initializer]
 This is the initializer for the myCUinfo API class. It takes in a username & password of a myCUinfo user and returns a class object that is a logged in user.
 ```python
@@ -24,8 +26,8 @@ password = "secret001"
 loginUser = mycuinfo.CUSession(user, password)
 ```
 
-#### CUSession.info()
-This method returns the basic user information. We will format the output with json.
+#### CUSession.info(force=False)
+This method returns the basic user information. We will format the output with json. To retrieve fresh data each time, set the optional argument `force=True`.
 ```python
 userInfo = loginUser.info()
 print json.dumps(userInfo, sort_keys=True, indent=4, separators=(',', ':'))
@@ -46,8 +48,8 @@ print json.dumps(userInfo, sort_keys=True, indent=4, separators=(',', ':'))
 }
 ```
 
-#### CUSession.classes(term)
-The method returns the class information of the user for the optional given term. We will format the output with json.
+#### CUSession.classes(term, force=False)
+The method returns the class information of the user for the optional given term. We will format the output with json. To retrieve fresh data each time, set the optional argument `force=True`.
 ```python
 userClasses = loginUser.classes("Spring 2015") # we can also call loginUser.classes() and it will default to the current semester
 print json.dumps(userClasses, sort_keys=True, indent=4, separators=(',', ':'))
@@ -86,8 +88,8 @@ print json.dumps(userClasses, sort_keys=True, indent=4, separators=(',', ':'))
 ]
 ```
 
-#### CUSession.books(department, courseNumber, section, term)
-The method returns the book information for a given class section for an optional given term. We will format the output with json.
+#### CUSession.books(department, courseNumber, section, term, force=False)
+The method returns the book information for a given class section for an optional given term. We will format the output with json. To retrieve fresh data each time, set the optional argument `force=True`.
 ```python
 department = "SPRT"
 courseNumber = "1010"
@@ -113,8 +115,8 @@ print json.dumps(userBooks, sort_keys=True, indent=4, separators=(',', ':'))
 ]
 ```
 
-#### CUSession.GPA()
-The method returns the current GPA of student
+#### CUSession.GPA(force=False)
+The method returns the current GPA of student. To retrieve fresh data each time, set the optional argument `force=True`.
 ```python
 gpa = loginUser.GPA()
 print "The current GPA is " + gpa
